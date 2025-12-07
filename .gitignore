@@ -1,0 +1,12 @@
+# Logs
+*.log
+
+# Compiled binaries
+file_agent
+*.o
+*.so
+*.a
+
+# Environment files
+.env
+.env.*
