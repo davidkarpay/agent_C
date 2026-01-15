@@ -1,12 +1,26 @@
-# Logs
-*.log
+# Virtual environment
+venv/
+.venv/
 
-# Compiled binaries
-file_agent
-*.o
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 *.so
-*.a
+.Python
+*.egg-info/
+dist/
+build/
 
-# Environment files
-.env
-.env.*
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+test_file.py
