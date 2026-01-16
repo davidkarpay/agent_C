@@ -3,6 +3,7 @@ SDLC Phase Agents.
 
 Specialized agents for each phase of the software development lifecycle:
 - Requirements Analyst: Parse requirements, flag ambiguities
+- Test Generator: Generate pytest test skeletons
 - Architecture Advisor: Design proposals, interface contracts
 - Code Generator: Boilerplate, tests, documentation
 - Test Orchestrator: Test execution, coverage analysis
@@ -12,6 +13,7 @@ Specialized agents for each phase of the software development lifecycle:
 
 from .base import BaseAgent, AgentConfig, AgentResult, AgentPhase
 from .requirements import RequirementsAnalystAgent
+from .test_generator import TestGeneratorAgent
 
 __all__ = [
     "BaseAgent",
@@ -19,4 +21,5 @@ __all__ = [
     "AgentResult",
     "AgentPhase",
     "RequirementsAnalystAgent",
+    "TestGeneratorAgent",
 ]

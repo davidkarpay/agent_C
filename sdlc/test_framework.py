@@ -6,7 +6,8 @@ Tests:
 1. Audit logging with hash chain verification
 2. Human approval interface (auto-approve mode)
 3. Requirements Analyst agent
-4. Tool registry
+4. Test Generator agent
+5. Tool registry
 """
 
 import json
@@ -24,6 +25,7 @@ from sdlc.config import FrameworkConfig, get_config
 from sdlc.tools.registry import ToolRegistry
 from sdlc.agents.base import AgentConfig
 from sdlc.agents.requirements import RequirementsAnalystAgent
+from sdlc.agents.test_generator import TestGeneratorAgent
 
 
 def test_audit_logging():
@@ -233,6 +235,109 @@ def test_requirements_agent():
         print("\n  [PASS] Requirements Analyst agent works correctly")
 
 
+def test_test_generator_agent():
+    """Test Test Generator agent."""
+    print("\n" + "=" * 60)
+    print("TEST: Test Generator Agent")
+    print("=" * 60)
+
+    # Check if Ollama is running
+    import requests
+    try:
+        response = requests.get("http://localhost:11434/api/tags", timeout=5)
+        if response.status_code != 200:
+            print("  [SKIP] Ollama not running")
+            return
+    except Exception:
+        print("  [SKIP] Ollama not running")
+        return
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = os.path.join(tmpdir, "testgen_audit.jsonl")
+        logger = AuditLogger(log_path)
+        gate = ApprovalGate(logger, auto_approve=True)
+
+        config = AgentConfig(
+            model_name="gemma2:2b",
+            temperature=0.0,
+            require_approval=True
+        )
+
+        # Create a simple source file to generate tests for
+        source_file = os.path.join(tmpdir, "sample_module.py")
+        with open(source_file, "w") as f:
+            f.write('''"""Sample module for test generation."""
+
+def add_numbers(a, b):
+    """Add two numbers together."""
+    return a + b
+
+def validate_email(email):
+    """Check if email is valid."""
+    return "@" in email and "." in email
+
+class Calculator:
+    """Simple calculator class."""
+
+    def multiply(self, x, y):
+        """Multiply two numbers."""
+        return x * y
+
+    def divide(self, x, y):
+        """Divide x by y."""
+        if y == 0:
+            raise ValueError("Cannot divide by zero")
+        return x / y
+''')
+
+        agent = TestGeneratorAgent(
+            config=config,
+            audit=logger,
+            approval=gate,
+            project_root=tmpdir
+        )
+
+        # Test with source file
+        print("  Testing with source file...")
+        result = agent.run({"source_file": source_file})
+
+        print(f"\n  Success: {result.success}")
+        print(f"  Iterations: {result.iterations}")
+        print(f"  Duration: {result.duration_ms}ms")
+        print(f"  Reasoning: {result.reasoning}")
+
+        if result.success and result.output:
+            test_count = result.output.get("test_count", 0)
+            print(f"\n  Tests generated: {test_count}")
+
+            # Show preview of generated test file
+            test_file = result.output.get("test_file", "")
+            if test_file:
+                preview = test_file[:500]
+                print(f"\n  Test file preview:")
+                for line in preview.split("\n")[:15]:
+                    print(f"    {line}")
+
+        # Test with function signatures
+        print("\n  Testing with function signatures...")
+        result2 = agent.run({
+            "functions": [
+                {"name": "calculate_total", "args": ["items", "tax_rate"], "returns": "float"},
+                {"name": "format_name", "args": ["first", "last"], "returns": "str"}
+            ]
+        })
+
+        print(f"  Success: {result2.success}")
+        if result2.success:
+            print(f"  Tests generated: {result2.output.get('test_count', 0)}")
+
+        # Verify audit trail
+        is_valid, errors = logger.verify_chain()
+        print(f"\n  Audit chain valid: {is_valid}")
+
+        print("\n  [PASS] Test Generator agent works correctly")
+
+
 def main():
     """Run all tests."""
     print("\nSDLC Framework Tests")
@@ -242,6 +347,7 @@ def main():
     test_approval_gate()
     test_tool_registry()
     test_requirements_agent()
+    test_test_generator_agent()
 
     print("\n" + "=" * 60)
     print("All tests completed!")
