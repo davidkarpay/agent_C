@@ -7,7 +7,8 @@ Tests:
 2. Human approval interface (auto-approve mode)
 3. Requirements Analyst agent
 4. Test Generator agent
-5. Tool registry
+5. Documentation Generator agent
+6. Tool registry
 """
 
 import json
@@ -26,6 +27,7 @@ from sdlc.tools.registry import ToolRegistry
 from sdlc.agents.base import AgentConfig
 from sdlc.agents.requirements import RequirementsAnalystAgent
 from sdlc.agents.test_generator import TestGeneratorAgent
+from sdlc.agents.documentation_generator import DocGeneratorAgent
 
 
 def test_audit_logging():
@@ -338,6 +340,106 @@ class Calculator:
         print("\n  [PASS] Test Generator agent works correctly")
 
 
+def test_doc_generator_agent():
+    """Test Documentation Generator agent."""
+    print("\n" + "=" * 60)
+    print("TEST: Documentation Generator Agent")
+    print("=" * 60)
+
+    # Check if Ollama is running
+    import requests
+    try:
+        response = requests.get("http://localhost:11434/api/tags", timeout=5)
+        if response.status_code != 200:
+            print("  [SKIP] Ollama not running")
+            return
+    except Exception:
+        print("  [SKIP] Ollama not running")
+        return
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = os.path.join(tmpdir, "docgen_audit.jsonl")
+        logger = AuditLogger(log_path)
+        gate = ApprovalGate(logger, auto_approve=True)
+
+        config = AgentConfig(
+            model_name="gemma2:2b",
+            temperature=0.0,
+            require_approval=True
+        )
+
+        # Create a source file with undocumented functions
+        source_file = os.path.join(tmpdir, "undocumented_module.py")
+        with open(source_file, "w") as f:
+            f.write('''"""Module for testing documentation generation."""
+
+def calculate_discount(price, percentage):
+    if percentage < 0 or percentage > 100:
+        raise ValueError("Invalid percentage")
+    return price * (1 - percentage / 100)
+
+def format_currency(amount, currency="USD"):
+    symbols = {"USD": "$", "EUR": "€", "GBP": "£"}
+    symbol = symbols.get(currency, currency)
+    return f"{symbol}{amount:.2f}"
+
+class ShoppingCart:
+    def __init__(self):
+        self.items = []
+
+    def add_item(self, name, price, quantity):
+        self.items.append({"name": name, "price": price, "quantity": quantity})
+
+    def get_total(self):
+        return sum(item["price"] * item["quantity"] for item in self.items)
+
+    def clear(self):
+        self.items = []
+''')
+
+        agent = DocGeneratorAgent(
+            config=config,
+            audit=logger,
+            approval=gate,
+            project_root=tmpdir
+        )
+
+        # Test docstring generation
+        print("  Testing docstring generation...")
+        result = agent.run({"source_file": source_file})
+
+        print(f"\n  Success: {result.success}")
+        print(f"  Iterations: {result.iterations}")
+        print(f"  Duration: {result.duration_ms}ms")
+        print(f"  Reasoning: {result.reasoning}")
+
+        if result.success and result.output:
+            doc_count = result.output.get("count", 0)
+            print(f"\n  Docstrings generated: {doc_count}")
+
+            # Show preview
+            docstrings = result.output.get("docstrings", "")
+            if docstrings:
+                preview = docstrings[:400]
+                print(f"\n  Preview:")
+                for line in preview.split("\n")[:12]:
+                    print(f"    {line}")
+
+        # Test API doc generation
+        print("\n  Testing API doc generation...")
+        result2 = agent.run({"api_doc": source_file})
+
+        print(f"  Success: {result2.success}")
+        if result2.success:
+            print(f"  Items documented: {result2.output.get('item_count', 0)}")
+
+        # Verify audit trail
+        is_valid, errors = logger.verify_chain()
+        print(f"\n  Audit chain valid: {is_valid}")
+
+        print("\n  [PASS] Documentation Generator agent works correctly")
+
+
 def main():
     """Run all tests."""
     print("\nSDLC Framework Tests")
@@ -348,6 +450,7 @@ def main():
     test_tool_registry()
     test_requirements_agent()
     test_test_generator_agent()
+    test_doc_generator_agent()
 
     print("\n" + "=" * 60)
     print("All tests completed!")
